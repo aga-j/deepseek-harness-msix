@@ -6,6 +6,10 @@ on:
       - "v*"
   workflow_dispatch:
 
+# 允许流水线创建 Release 并上传安装包
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -25,7 +29,9 @@ jobs:
         run: npm run prepare:resources
 
       - name: Build NSIS installer
-        run: npx electron-builder --win nsis
+        # --publish never:只产出安装包,发布统一交给下面的 softprops/action-gh-release 步骤,
+        # 否则 electron-builder 检测到 tag 会尝试自行发布并因缺 GH_TOKEN 报错
+        run: npx electron-builder --win nsis --publish never
         env:
           # 未配置代码签名证书时显式关闭,避免构建失败
           CSC_LINK: ""
