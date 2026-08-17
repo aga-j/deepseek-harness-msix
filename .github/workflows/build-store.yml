@@ -1,0 +1,47 @@
+name: Build Microsoft Store Package (MSIX)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-store:
+    # MSIX 打包依赖 Windows SDK 的 makeappx.exe,必须在 Windows runner 上构建
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install app dependencies (electron, electron-builder)
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare bundled resources (node.exe + dsh)
+        run: npm run prepare:resources
+
+      - name: Build MSIX package for Microsoft Store
+        # 商店提交无需签名:提交后微软会用自己的证书重签,
+        # electron-builder 在未配置证书时会使用 CN=ms 占位符
+        run: npx electron-builder --win msix --publish never
+        env:
+          CSC_LINK: ""
+          CSC_KEY_PASSWORD: ""
+
+      - name: Upload MSIX upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-store-upload
+          # .msixupload 直接上传 Partner Center;.msix 可用于本地侧加载测试
+          path: |
+            release/*.msixupload
+            release/*.msix
+          retention-days: 30
