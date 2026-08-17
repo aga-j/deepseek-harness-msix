@@ -1,0 +1,7 @@
+node_modules/
+resources/node/
+resources/dsh/
+resources/build-info.json
+resources/*.zip
+release/
+dist/

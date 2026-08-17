@@ -1,0 +1,46 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install app dependencies (electron, electron-builder)
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare bundled resources (node.exe + dsh)
+        run: npm run prepare:resources
+
+      - name: Build NSIS installer
+        run: npx electron-builder --win nsis
+        env:
+          # 未配置代码签名证书时显式关闭,避免构建失败
+          CSC_LINK: ""
+          CSC_KEY_PASSWORD: ""
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: release/*.exe
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          generate_release_notes: true
