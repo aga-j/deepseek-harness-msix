@@ -77,6 +77,18 @@ function dshZipPath() {
   return path.join(resourcesDir(), 'dsh.zip');
 }
 
+/** 构建期写入的 dsh 文件总数,用于首启解压时显示百分比 */
+function dshFileTotal() {
+  try {
+    const info = JSON.parse(
+      fs.readFileSync(path.join(resourcesDir(), 'build-info.json'), 'utf8')
+    );
+    return info.dshFileCount || 0;
+  } catch {
+    return 0;
+  }
+}
+
 function setSplashHint(text) {
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.webContents
@@ -94,11 +106,27 @@ function ensureDshRuntime() {
   if (!fs.existsSync(zipPath)) {
     return Promise.reject(new Error('缺少内嵌运行时资源(dsh),请重新安装应用。'));
   }
-  setSplashHint('首次运行,正在初始化组件(约 1~3 分钟,仅这一次)…');
+  setSplashHint('首次运行,正在初始化组件(仅这一次)…');
   fs.mkdirSync(runtimeDir(), { recursive: true });
+  const total = dshFileTotal();
   return new Promise((resolve, reject) => {
-    // Windows 10+ 自带 tar.exe(bsdtar),可直接解压 zip
-    const p = spawn('tar', ['-xf', zipPath, '-C', runtimeDir()], { windowsHide: true });
+    // Windows 10+ 自带 tar.exe(bsdtar),可直接解压 zip;
+    // -v 输出每个解压的文件名,借此统计实时进度(解压瓶颈常在 Defender 实时扫描)
+    const p = spawn('tar', ['-xvf', zipPath, '-C', runtimeDir()], { windowsHide: true });
+    let count = 0;
+    let lastUpdate = 0;
+    p.stdout.on('data', (chunk) => {
+      for (const ch of chunk) if (ch === 10) count++;
+      const now = Date.now();
+      if (now - lastUpdate > 400) {
+        lastUpdate = now;
+        setSplashHint(
+          total > 0
+            ? `首次运行,正在初始化组件… ${count} / ${total} 个文件(仅这一次)`
+            : `首次运行,正在初始化组件… 已解压 ${count} 个文件(仅这一次)`
+        );
+      }
+    });
     p.once('error', reject);
     p.once('exit', (code) => {
       if (code === 0 && fs.existsSync(dshCliPath())) return resolve();

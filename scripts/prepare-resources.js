@@ -115,6 +115,30 @@ function prepareDsh() {
   console.log(`[prepare] dsh v${DSH_VERSION} 安装完成`);
 }
 
+/** 删除非 win32-x64 平台的预编译二进制,减小体积和文件数(本安装包只面向 Windows x64) */
+function pruneDsh() {
+  const nm = path.join(DSH_DIR, 'node_modules');
+  const pruneList = [
+    path.join(nm, 'node-pty', 'prebuilds', 'darwin-x64'),
+    path.join(nm, 'node-pty', 'prebuilds', 'darwin-arm64'),
+    path.join(nm, 'node-pty', 'prebuilds', 'win32-arm64')
+  ];
+  for (const p of pruneList) {
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { recursive: true, force: true });
+      console.log(`[prepare] 已裁剪 ${path.relative(DSH_DIR, p)}`);
+    }
+  }
+}
+
+function countFiles(dir) {
+  let n = 0;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    n += e.isDirectory() ? countFiles(path.join(dir, e.name)) : 1;
+  }
+  return n;
+}
+
 /**
  * 把 dsh 整个目录打成单个 dsh.zip。
  * 原因:依赖树有数万个小文件,NSIS 安装向导逐个写入 + Defender 逐个扫描,
@@ -136,10 +160,17 @@ function packDsh() {
   fs.mkdirSync(RES, { recursive: true });
   await prepareNode();
   prepareDsh();
+  pruneDsh();
   packDsh();
+  const dshFileCount = countFiles(DSH_DIR);
+  console.log(`[prepare] dsh 文件总数: ${dshFileCount}`);
   fs.writeFileSync(
     path.join(RES, 'build-info.json'),
-    JSON.stringify({ node: NODE_VERSION, dsh: DSH_VERSION, builtAt: new Date().toISOString() }, null, 2)
+    JSON.stringify(
+      { node: NODE_VERSION, dsh: DSH_VERSION, dshFileCount, builtAt: new Date().toISOString() },
+      null,
+      2
+    )
   );
   console.log('[prepare] 全部资源就绪');
 })().catch((err) => {
