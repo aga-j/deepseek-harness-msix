@@ -53,6 +53,20 @@ function runtimeDir() {
   return path.join(dshDataDir(), 'runtime');
 }
 
+/**
+ * Agent 的工作区(dsh 的启动目录 = sandbox-policy 的 workspaceRoot)。
+ *
+ * 必须是独立、干净的目录,绝不能指向 runtimeDir():
+ * dsh 的 Windows ACL 沙箱会在首次受限执行时对整棵工作区树递归传播 ACE,
+ * 树越大阻塞越久(上游自述"大型工作区上以分钟计");
+ * 而 runtimeDir 下有数万个运行时文件,曾导致首条命令卡数分钟。
+ */
+function workspaceDir() {
+  const dir = path.join(app.getPath('home'), 'DeepSeekHarness');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 /** 开发模式直接用 resources/dsh 松散目录;安装版用首启解压出来的目录 */
 function dshHome() {
   const loose = path.join(resourcesDir(), 'dsh');
@@ -156,7 +170,7 @@ function startServer(port) {
   const args = [dshCliPath(), 'web', '--host', HOST, '--port', String(port)];
 
   serverProcess = spawn(nodeExePath(), args, {
-    cwd: dshDataDir(),
+    cwd: workspaceDir(),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     env: {

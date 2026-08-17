@@ -1,7 +1,7 @@
 {
   "name": "deepseek-harness-desktop",
   "productName": "DeepSeek Harness",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "DeepSeek Harness Windows desktop client (Electron shell + bundled Node runtime + bundled dsh)",
   "main": "main.js",
   "license": "MIT",
