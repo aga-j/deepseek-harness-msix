@@ -3,5 +3,6 @@ resources/node/
 resources/dsh/
 resources/build-info.json
 resources/*.zip
+resources/dsh.zip
 release/
 dist/

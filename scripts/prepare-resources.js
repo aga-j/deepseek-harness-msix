@@ -115,10 +115,28 @@ function prepareDsh() {
   console.log(`[prepare] dsh v${DSH_VERSION} 安装完成`);
 }
 
+/**
+ * 把 dsh 整个目录打成单个 dsh.zip。
+ * 原因:依赖树有数万个小文件,NSIS 安装向导逐个写入 + Defender 逐个扫描,
+ * 会导致安装过程长达 5~15 分钟;改成单文件后安装几十秒完成,
+ * 解压动作转移到客户端首次启动时进行(只发生一次)。
+ */
+function packDsh() {
+  const zipPath = path.join(RES, 'dsh.zip');
+  if (fs.existsSync(zipPath)) {
+    console.log('[prepare] dsh.zip 已存在,跳过打包');
+    return;
+  }
+  console.log('[prepare] 正在打包 dsh.zip …');
+  run('tar', ['-acf', zipPath, '-C', RES, 'dsh']);
+  console.log('[prepare] dsh.zip 打包完成');
+}
+
 (async () => {
   fs.mkdirSync(RES, { recursive: true });
   await prepareNode();
   prepareDsh();
+  packDsh();
   fs.writeFileSync(
     path.join(RES, 'build-info.json'),
     JSON.stringify({ node: NODE_VERSION, dsh: DSH_VERSION, builtAt: new Date().toISOString() }, null, 2)

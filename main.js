@@ -4,11 +4,13 @@
  * DeepSeek Harness Desktop —— Electron 主进程
  *
  * 工作流程:
- *   1. 申请一个空闲端口(避免与用户机器上已有服务冲突)
- *   2. 用随包分发的 node.exe 启动内嵌的 dsh web 服务
- *   3. 轮询 http://127.0.0.1:<port> 直到服务就绪(期间显示启动画面)
- *   4. 创建主窗口加载 Web UI
- *   5. 退出时杀掉整个 dsh 进程树
+ *   1. 首次运行时,把安装包内的 dsh.zip 解压到用户目录(仅一次,避免安装向导
+ *      逐个写入数万个小文件导致安装极慢、且避开 Program Files 写权限问题)
+ *   2. 申请一个空闲端口(避免与用户机器上已有服务冲突)
+ *   3. 用随包分发的 node.exe 启动 dsh web 服务
+ *   4. 轮询 http://127.0.0.1:<port> 直到服务就绪(期间显示启动画面)
+ *   5. 创建主窗口加载 Web UI
+ *   6. 退出时杀掉整个 dsh 进程树
  */
 
 const { app, BrowserWindow, dialog } = require('electron');
@@ -39,10 +41,30 @@ function nodeExePath() {
   return path.join(resourcesDir(), 'node', exe);
 }
 
+/** dsh 的用户数据(会话、日志、工作区)放在系统用户目录下,避免装在 Program Files 时的权限问题 */
+function dshDataDir() {
+  const dir = path.join(app.getPath('appData'), 'DeepSeekHarness');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** 运行时目录:首启时把 dsh.zip 解压到这里 */
+function runtimeDir() {
+  return path.join(dshDataDir(), 'runtime');
+}
+
+/** 开发模式直接用 resources/dsh 松散目录;安装版用首启解压出来的目录 */
+function dshHome() {
+  const loose = path.join(resourcesDir(), 'dsh');
+  if (fs.existsSync(path.join(loose, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) {
+    return loose;
+  }
+  return path.join(runtimeDir(), 'dsh');
+}
+
 function dshCliPath() {
   return path.join(
-    resourcesDir(),
-    'dsh',
+    dshHome(),
     'node_modules',
     '@deepseek-ai',
     'dsh',
@@ -51,11 +73,38 @@ function dshCliPath() {
   );
 }
 
-/** dsh 的用户数据(会话、日志、工作区)放在系统用户目录下,避免装在 Program Files 时的权限问题 */
-function dshDataDir() {
-  const dir = path.join(app.getPath('appData'), 'DeepSeekHarness');
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+function dshZipPath() {
+  return path.join(resourcesDir(), 'dsh.zip');
+}
+
+function setSplashHint(text) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents
+      .executeJavaScript(
+        `document.querySelector('.hint').textContent = ${JSON.stringify(text)}`
+      )
+      .catch(() => {});
+  }
+}
+
+/** 首次运行:把安装包内的 dsh.zip 解压到用户目录(只需一次) */
+function ensureDshRuntime() {
+  if (fs.existsSync(dshCliPath())) return Promise.resolve();
+  const zipPath = dshZipPath();
+  if (!fs.existsSync(zipPath)) {
+    return Promise.reject(new Error('缺少内嵌运行时资源(dsh),请重新安装应用。'));
+  }
+  setSplashHint('首次运行,正在初始化组件(约 1~3 分钟,仅这一次)…');
+  fs.mkdirSync(runtimeDir(), { recursive: true });
+  return new Promise((resolve, reject) => {
+    // Windows 10+ 自带 tar.exe(bsdtar),可直接解压 zip
+    const p = spawn('tar', ['-xf', zipPath, '-C', runtimeDir()], { windowsHide: true });
+    p.once('error', reject);
+    p.once('exit', (code) => {
+      if (code === 0 && fs.existsSync(dshCliPath())) return resolve();
+      reject(new Error(`运行时初始化失败(tar 退出码 ${code}),请重新安装应用。`));
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -211,9 +260,11 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     createSplash();
     try {
-      if (!fs.existsSync(nodeExePath()) || !fs.existsSync(dshCliPath())) {
-        throw new Error('缺少内嵌运行时资源(node 或 dsh),请重新安装应用。');
+      if (!fs.existsSync(nodeExePath())) {
+        throw new Error('缺少内嵌 Node 运行时,请重新安装应用。');
       }
+      await ensureDshRuntime();
+      setSplashHint('正在启动本地服务,请稍候…');
       serverPort = await getFreePort();
       startServer(serverPort);
       const url = `http://${HOST}:${serverPort}`;
