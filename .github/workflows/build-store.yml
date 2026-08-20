@@ -28,20 +28,20 @@ jobs:
       - name: Prepare bundled resources (node.exe + dsh)
         run: npm run prepare:resources
 
-      - name: Build MSIX package for Microsoft Store
-        # 商店提交无需签名:提交后微软会用自己的证书重签,
-        # electron-builder 在未配置证书时会使用 CN=ms 占位符
-        run: npx electron-builder --win msix --publish never
+      - name: Build AppX package for Microsoft Store
+        # electron-builder 25 中商店打包 target 名为 appx(产出 .appx,可直接上传 Partner Center);
+        # 商店提交无需签名:提交后微软会用自己的证书重签
+        run: npx electron-builder --win appx --publish never
         env:
           CSC_LINK: ""
           CSC_KEY_PASSWORD: ""
 
-      - name: Upload MSIX upload package artifact
+      - name: Upload AppX store package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: msix-store-upload
-          # .msixupload 直接上传 Partner Center;.msix 可用于本地侧加载测试
+          name: appx-store-upload
+          # .appx 直接上传 Partner Center
           path: |
-            release/*.msixupload
+            release/*.appx
             release/*.msix
           retention-days: 30
