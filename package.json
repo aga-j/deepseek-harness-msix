@@ -10,7 +10,7 @@
     "prepare:resources": "node scripts/prepare-resources.js",
     "pack": "npm run prepare:resources && electron-builder --dir",
     "dist": "npm run prepare:resources && electron-builder --win nsis",
-    "dist:store": "npm run prepare:resources && electron-builder --win msix --publish never"
+    "dist:store": "npm run prepare:resources && electron-builder --win appx --publish never"
   },
   "devDependencies": {
     "electron": "^33.4.11",
@@ -64,13 +64,12 @@
       "createStartMenuShortcut": true,
       "shortcutName": "DeepSeek Harness"
     },
-    "msix": {
+    "appx": {
       "identityName": "wika.DS",
       "publisher": "CN=9414047A-A9B8-44C8-8556-193718E99432",
       "publisherDisplayName": "wika",
       "displayName": "DS桌面版",
       "applicationId": "wika.DS",
-      "createMsixupload": true,
       "minVersion": "10.0.17763.0",
       "maxVersionTested": "10.0.22621.0",
       "languages": [
